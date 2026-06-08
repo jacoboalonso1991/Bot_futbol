@@ -20,7 +20,7 @@ headers = {
 }
 
 # 🧠 ID DEL GRUPO (lo pones luego con /id)
-CHAT_ID = None
+CHAT_ID = -1001844013100
 
 # 🧾 EVITAR DUPLICADOS
 seen_events = set()
