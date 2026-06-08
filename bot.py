@@ -10,25 +10,39 @@ from telegram.ext import (
     ContextTypes
 )
 
+# 🔐 ENV
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
-headers = {"X-Auth-Token": API_KEY}
+# 📡 HEADERS API-FOOTBALL
+headers = {
+    "x-apisports-key": API_KEY
+}
 
-# 👉 PON AQUÍ TU ID DE GRUPO
-CHAT_ID = -1001234567890
+# 🧠 ID DEL GRUPO (lo pones luego con /id)
+CHAT_ID = None
+
+# 🧾 EVITAR DUPLICADOS
+seen_events = set()
 
 
-# 🏆 MENÚ
+# 🆔 SACAR CHAT ID
+async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(f"🆔 CHAT ID: {chat_id}")
+
+
+# 🏆 START MENU
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")]
+        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")],
+        [InlineKeyboardButton("🆔 CHAT ID", callback_data="id")]
     ]
 
     await update.message.reply_text(
-        "🚀 MUNDIAL LIVE ACTIVADO",
+        "🚀 BOT FÚTBOL LIVE ACTIVADO",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -39,20 +53,26 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    url = "https://api.football-data.org/v4/matches"
+    url = "https://v3.football.api-sports.io/fixtures?live=all"
+
     data = requests.get(url, headers=headers).json()
 
-    matches = data.get("matches", [])
+    response = data.get("response", [])
 
-    msg = "📅 PARTIDOS:\n\n"
+    msg = "📅 PARTIDOS EN DIRECTO:\n\n"
 
-    for m in matches[:10]:
-        msg += f"{m['homeTeam']['name']} vs {m['awayTeam']['name']} - {m['status']}\n"
+    for match in response[:10]:
+
+        home = match["teams"]["home"]["name"]
+        away = match["teams"]["away"]["name"]
+        status = match["fixture"]["status"]["short"]
+
+        msg += f"{home} vs {away} - {status}\n"
 
     await query.edit_message_text(msg)
 
 
-# 🌍 GRUPOS (simple)
+# 🌍 GRUPOS (demo simple)
 async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -64,60 +84,74 @@ async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await query.edit_message_text(
-        "Selecciona grupo (demo)",
+        "Selecciona grupo:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-# 🔥 LIVE WATCHER
+# 🔥 LIVE ENGINE (GOLES + ROJAS REALES)
 async def live_checker(app):
 
-    last_state = {}
+    global seen_events
 
     while True:
 
         try:
-            url = "https://api.football-data.org/v4/matches"
+            url = "https://v3.football.api-sports.io/fixtures?live=all"
+
             data = requests.get(url, headers=headers).json()
+            response = data.get("response", [])
 
-            matches = data.get("matches", [])
+            for match in response:
 
-            for m in matches:
+                fixture_id = match["fixture"]["id"]
+                home = match["teams"]["home"]["name"]
+                away = match["teams"]["away"]["name"]
 
-                match_id = m["id"]
-                status = m["status"]
-                home = m["homeTeam"]["name"]
-                away = m["awayTeam"]["name"]
+                events = match.get("events", [])
 
-                # 🔴 INICIO PARTIDO
-                if status == "IN_PLAY" and last_state.get(match_id) != "IN_PLAY":
+                for event in events:
 
-                    await app.bot.send_message(
-                        CHAT_ID,
-                        f"⚽ INICIO PARTIDO\n{home} vs {away}"
-                    )
+                    player = event.get("player", {}).get("name", "Desconocido")
+                    minute = event.get("time", {}).get("elapsed", 0)
+                    event_type = event.get("type", "")
+                    detail = event.get("detail", "")
 
-                # 🏁 FINAL
-                if status == "FINISHED" and last_state.get(match_id) != "FINISHED":
+                    event_id = f"{fixture_id}-{minute}-{event_type}-{player}"
 
-                    await app.bot.send_message(
-                        CHAT_ID,
-                        f"🏁 FINAL DEL PARTIDO\n{home} vs {away}"
-                    )
+                    if event_id in seen_events:
+                        continue
 
-                last_state[match_id] = status
+                    seen_events.add(event_id)
+
+                    # ⚽ GOL
+                    if event_type == "Goal":
+
+                        if CHAT_ID:
+                            await app.bot.send_message(
+                                CHAT_ID,
+                                f"⚽ GOOOOOOL!\n{home} vs {away}\n🎯 {player} ({minute}')"
+                            )
+
+                    # 🟥 ROJA
+                    elif event_type == "Card" and detail == "Red Card":
+
+                        if CHAT_ID:
+                            await app.bot.send_message(
+                                CHAT_ID,
+                                f"🟥 EXPULSIÓN!\n{home} vs {away}\n❌ {player} ({minute}')"
+                            )
 
         except Exception as e:
-            print("Error live checker:", e)
+            print("LIVE ERROR:", e)
 
-        await asyncio.sleep(60)
+        await asyncio.sleep(30)
 
 
 # 🔀 BOTONES
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    query = update.callback_query
-    data = query.data
+    data = update.callback_query.data
 
     if data == "today":
         await today(update, context)
@@ -125,20 +159,24 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "groups":
         await groups(update, context)
 
+    elif data == "id":
+        await get_id(update, context)
 
-# 🤖 MAIN
+
+# 🤖 MAIN BOT
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("id", get_id))
 app.add_handler(CallbackQueryHandler(buttons))
 
 
-# 🚀 ARRANCAR BOT + LIVE SYSTEM
+# 🚀 LIVE SYSTEM
 async def post_init(app):
     asyncio.create_task(live_checker(app))
 
 
 app.post_init = post_init
 
-print("BOT LIVE CON AVISOS ACTIVADO 🚀")
+print("🚀 BOT LIVE CON API-FOOTBALL ACTIVADO")
 app.run_polling()
