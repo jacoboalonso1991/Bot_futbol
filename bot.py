@@ -1,5 +1,6 @@
 import requests
 import os
+import asyncio
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -9,29 +10,30 @@ from telegram.ext import (
     ContextTypes
 )
 
-# 🔐 VARIABLES DE ENTORNO (Railway)
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
 headers = {"X-Auth-Token": API_KEY}
 
+# 👉 PON AQUÍ TU ID DE GRUPO
+CHAT_ID = -1001234567890
 
-# 🏆 MENÚ PRINCIPAL
+
+# 🏆 MENÚ
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")],
-        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")]
+        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")]
     ]
 
     await update.message.reply_text(
-        "🚀 MUNDIAL 2026",
+        "🚀 MUNDIAL LIVE ACTIVADO",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-# 📅 PARTIDOS HOY
+# 📅 PARTIDOS
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -42,136 +44,80 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     matches = data.get("matches", [])
 
-    if not matches:
-        await query.edit_message_text("⚽ No hay partidos disponibles.")
-        return
-
-    msg = "📅 PARTIDOS HOY:\n\n"
+    msg = "📅 PARTIDOS:\n\n"
 
     for m in matches[:10]:
-        home = m["homeTeam"]["name"]
-        away = m["awayTeam"]["name"]
-        status = m["status"]
+        msg += f"{m['homeTeam']['name']} vs {m['awayTeam']['name']} - {m['status']}\n"
 
-        msg += f"{home} vs {away} - {status}\n"
-
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
-    ]
-
-    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.edit_message_text(msg)
 
 
-# 🌍 GRUPOS (MANUALES)
+# 🌍 GRUPOS (simple)
 async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("Grupo A", callback_data="group_A"),
-         InlineKeyboardButton("Grupo B", callback_data="group_B")],
-
-        [InlineKeyboardButton("Grupo C", callback_data="group_C"),
-         InlineKeyboardButton("Grupo D", callback_data="group_D")],
-
-        [InlineKeyboardButton("Grupo E", callback_data="group_E"),
-         InlineKeyboardButton("Grupo F", callback_data="group_F")],
-
-        [InlineKeyboardButton("Grupo G", callback_data="group_G"),
-         InlineKeyboardButton("Grupo H", callback_data="group_H")],
-
-        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
+        [InlineKeyboardButton("Grupo A", callback_data="a")],
+        [InlineKeyboardButton("Grupo B", callback_data="b")]
     ]
 
     await query.edit_message_text(
-        "🌍 Selecciona un grupo:",
+        "Selecciona grupo (demo)",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-# 📊 DETALLE DE GRUPO
-async def group_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 🔥 LIVE WATCHER
+async def live_checker(app):
 
-    query = update.callback_query
-    await query.answer()
+    last_state = {}
 
-    group = query.data.split("_")[1]
+    while True:
 
-    url = "https://api.football-data.org/v4/competitions/WC/standings"
-    data = requests.get(url, headers=headers).json()
+        try:
+            url = "https://api.football-data.org/v4/matches"
+            data = requests.get(url, headers=headers).json()
 
-    standings = data.get("standings", [])
+            matches = data.get("matches", [])
 
-    msg = f"🏟️ Grupo {group}\n\n"
+            for m in matches:
 
-    found = False
+                match_id = m["id"]
+                status = m["status"]
+                home = m["homeTeam"]["name"]
+                away = m["awayTeam"]["name"]
 
-    for g in standings:
-        if group in g.get("group", ""):
-            found = True
+                # 🔴 INICIO PARTIDO
+                if status == "IN_PLAY" and last_state.get(match_id) != "IN_PLAY":
 
-            for team in g["table"]:
-                msg += f"{team['position']}. {team['team']['name']} - {team['points']} pts\n"
+                    await app.bot.send_message(
+                        CHAT_ID,
+                        f"⚽ INICIO PARTIDO\n{home} vs {away}"
+                    )
 
-    if not found:
-        msg += "No hay datos disponibles."
+                # 🏁 FINAL
+                if status == "FINISHED" and last_state.get(match_id) != "FINISHED":
 
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Volver", callback_data="groups")]
-    ]
+                    await app.bot.send_message(
+                        CHAT_ID,
+                        f"🏁 FINAL DEL PARTIDO\n{home} vs {away}"
+                    )
 
-    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+                last_state[match_id] = status
 
+        except Exception as e:
+            print("Error live checker:", e)
 
-# 📊 CLASIFICACIÓN GLOBAL
-async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    url = "https://api.football-data.org/v4/competitions/WC/standings"
-    data = requests.get(url, headers=headers).json()
-
-    standings = data.get("standings", [])
-
-    msg = "📊 CLASIFICACIÓN MUNDIAL\n\n"
-
-    for group in standings:
-        msg += f"\n🏆 {group.get('group', 'GRUPO')}\n"
-
-        for team in group["table"][:4]:
-            msg += f"{team['position']}. {team['team']['name']} - {team['points']} pts\n"
-
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
-    ]
-
-    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+        await asyncio.sleep(60)
 
 
-# 🔙 VOLVER AL MENÚ
-async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")],
-        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")]
-    ]
-
-    await query.edit_message_text(
-        "🏆 MENÚ MUNDIAL",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-
-# 🔀 ROUTER BOTONES
+# 🔀 BOTONES
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    data = update.callback_query.data
+    query = update.callback_query
+    data = query.data
 
     if data == "today":
         await today(update, context)
@@ -179,21 +125,20 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "groups":
         await groups(update, context)
 
-    elif data.startswith("group_"):
-        await group_detail(update, context)
 
-    elif data == "standings":
-        await standings(update, context)
-
-    elif data == "back":
-        await back(update, context)
-
-
-# 🤖 BOT
+# 🤖 MAIN
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(buttons))
 
-print("Bot con menú en marcha...")
+
+# 🚀 ARRANCAR BOT + LIVE SYSTEM
+async def post_init(app):
+    asyncio.create_task(live_checker(app))
+
+
+app.post_init = post_init
+
+print("BOT LIVE CON AVISOS ACTIVADO 🚀")
 app.run_polling()
