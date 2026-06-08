@@ -25,7 +25,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "🚀 MENU NUEVO FUNCIONANDO",
+        "🚀 MUNDIAL 2026",
         reply_markup=reply_markup
     )
 
@@ -53,12 +53,21 @@ async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    keyboard = [
-        [InlineKeyboardButton("Grupo A", callback_data="group_A"),
-         InlineKeyboardButton("Grupo B", callback_data="group_B")],
-        [InlineKeyboardButton("Grupo C", callback_data="group_C"),
-         InlineKeyboardButton("Grupo D", callback_data="group_D")],
-        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
+   keyboard = [
+    [InlineKeyboardButton("Grupo A", callback_data="group_A"),
+     InlineKeyboardButton("Grupo B", callback_data="group_B")],
+
+    [InlineKeyboardButton("Grupo C", callback_data="group_C"),
+     InlineKeyboardButton("Grupo D", callback_data="group_D")],
+
+    [InlineKeyboardButton("Grupo E", callback_data="group_E"),
+     InlineKeyboardButton("Grupo F", callback_data="group_F")],
+
+    [InlineKeyboardButton("Grupo G", callback_data="group_G"),
+     InlineKeyboardButton("Grupo H", callback_data="group_H")],
+
+    [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
+]
     ]
 
     await query.edit_message_text(
