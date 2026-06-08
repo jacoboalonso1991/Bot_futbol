@@ -1,4 +1,6 @@
 import requests
+import os
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -7,14 +9,13 @@ from telegram.ext import (
     ContextTypes
 )
 
-import os
-
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
 headers = {"X-Auth-Token": API_KEY}
 
-# 📊 START MENU
+
+# 🏆 MENÚ PRINCIPAL
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
@@ -22,12 +23,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🌍 Grupos", callback_data="groups")]
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     await update.message.reply_text(
         "🚀 MUNDIAL 2026",
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
 
 # 📅 PARTIDOS
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -40,34 +40,42 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     matches = data.get("matches", [])
 
-    msg = "📅 PARTIDOS HOY:\n\n"
+    if not matches:
+        await query.edit_message_text("⚽ No hay partidos disponibles.")
+        return
+
+    msg = "📅 PARTIDOS:\n\n"
 
     for m in matches[:10]:
-        msg += f"{m['homeTeam']['name']} vs {m['awayTeam']['name']} - {m['status']}\n"
+        home = m["homeTeam"]["name"]
+        away = m["awayTeam"]["name"]
+        status = m["status"]
+
+        msg += f"{home} vs {away} - {status}\n"
 
     await query.edit_message_text(msg)
 
-# 🌍 GRUPOS MENU
+
+# 🌍 MENÚ DE GRUPOS
 async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-   keyboard = [
-    [InlineKeyboardButton("Grupo A", callback_data="group_A"),
-     InlineKeyboardButton("Grupo B", callback_data="group_B")],
+    keyboard = [
+        [InlineKeyboardButton("Grupo A", callback_data="group_A"),
+         InlineKeyboardButton("Grupo B", callback_data="group_B")],
 
-    [InlineKeyboardButton("Grupo C", callback_data="group_C"),
-     InlineKeyboardButton("Grupo D", callback_data="group_D")],
+        [InlineKeyboardButton("Grupo C", callback_data="group_C"),
+         InlineKeyboardButton("Grupo D", callback_data="group_D")],
 
-    [InlineKeyboardButton("Grupo E", callback_data="group_E"),
-     InlineKeyboardButton("Grupo F", callback_data="group_F")],
+        [InlineKeyboardButton("Grupo E", callback_data="group_E"),
+         InlineKeyboardButton("Grupo F", callback_data="group_F")],
 
-    [InlineKeyboardButton("Grupo G", callback_data="group_G"),
-     InlineKeyboardButton("Grupo H", callback_data="group_H")],
+        [InlineKeyboardButton("Grupo G", callback_data="group_G"),
+         InlineKeyboardButton("Grupo H", callback_data="group_H")],
 
-    [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
-]
+        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
     ]
 
     await query.edit_message_text(
@@ -75,7 +83,8 @@ async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# 📊 DETALLE DE GRUPOS
+
+# 📊 DETALLE DE GRUPO
 async def group_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -90,16 +99,34 @@ async def group_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = f"🏟️ Grupo {group}\n\n"
 
+    found = False
+
     for g in standings:
         if group in g.get("group", ""):
+
+            found = True
+
             for team in g["table"]:
-                msg += f"{team['position']}. {team['team']['name']} - {team['points']} pts\n"
+                msg += (
+                    f"{team['position']}. "
+                    f"{team['team']['name']} - "
+                    f"{team['points']} pts\n"
+                )
 
-    keyboard = [[InlineKeyboardButton("⬅️ Volver", callback_data="groups")]]
+    if not found:
+        msg += "No hay datos disponibles."
 
-    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Volver", callback_data="groups")]
+    ]
 
-# 🔙 VOLVER
+    await query.edit_message_text(
+        msg,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# 🔙 VOLVER AL MENÚ
 async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -115,11 +142,11 @@ async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# 🔀 ROUTER DE BOTONES
+
+# 🔀 CONTROLADOR DE BOTONES
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    query = update.callback_query
-    data = query.data
+    data = update.callback_query.data
 
     if data == "today":
         await today(update, context)
