@@ -9,6 +9,7 @@ from telegram.ext import (
     ContextTypes
 )
 
+# 🔐 VARIABLES DE ENTORNO (Railway)
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
@@ -20,7 +21,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")]
+        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")],
+        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")]
     ]
 
     await update.message.reply_text(
@@ -29,7 +31,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 📅 PARTIDOS
+# 📅 PARTIDOS HOY
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -44,7 +46,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⚽ No hay partidos disponibles.")
         return
 
-    msg = "📅 PARTIDOS:\n\n"
+    msg = "📅 PARTIDOS HOY:\n\n"
 
     for m in matches[:10]:
         home = m["homeTeam"]["name"]
@@ -53,10 +55,14 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg += f"{home} vs {away} - {status}\n"
 
-    await query.edit_message_text(msg)
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
+    ]
+
+    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-# 🌍 MENÚ DE GRUPOS
+# 🌍 GRUPOS (MANUALES)
 async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
@@ -103,15 +109,10 @@ async def group_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for g in standings:
         if group in g.get("group", ""):
-
             found = True
 
             for team in g["table"]:
-                msg += (
-                    f"{team['position']}. "
-                    f"{team['team']['name']} - "
-                    f"{team['points']} pts\n"
-                )
+                msg += f"{team['position']}. {team['team']['name']} - {team['points']} pts\n"
 
     if not found:
         msg += "No hay datos disponibles."
@@ -120,10 +121,33 @@ async def group_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("⬅️ Volver", callback_data="groups")]
     ]
 
-    await query.edit_message_text(
-        msg,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# 📊 CLASIFICACIÓN GLOBAL
+async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    url = "https://api.football-data.org/v4/competitions/WC/standings"
+    data = requests.get(url, headers=headers).json()
+
+    standings = data.get("standings", [])
+
+    msg = "📊 CLASIFICACIÓN MUNDIAL\n\n"
+
+    for group in standings:
+        msg += f"\n🏆 {group.get('group', 'GRUPO')}\n"
+
+        for team in group["table"][:4]:
+            msg += f"{team['position']}. {team['team']['name']} - {team['points']} pts\n"
+
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Volver", callback_data="back")]
+    ]
+
+    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 # 🔙 VOLVER AL MENÚ
@@ -134,7 +158,8 @@ async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")]
+        [InlineKeyboardButton("🌍 Grupos", callback_data="groups")],
+        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")]
     ]
 
     await query.edit_message_text(
@@ -143,7 +168,7 @@ async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# 🔀 CONTROLADOR DE BOTONES
+# 🔀 ROUTER BOTONES
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = update.callback_query.data
@@ -156,6 +181,9 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("group_"):
         await group_detail(update, context)
+
+    elif data == "standings":
+        await standings(update, context)
 
     elif data == "back":
         await back(update, context)
