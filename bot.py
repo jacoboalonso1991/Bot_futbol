@@ -11,9 +11,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# =========================
 # 🔐 CONFIG
-# =========================
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
@@ -22,12 +20,9 @@ headers = {
     "Accept": "application/json"
 }
 
-CHAT_ID = -1001844013100
-seen_events = set()
-
 
 # =========================
-# 🔧 REQUEST WRAPPER
+# 🔧 REQUEST
 # =========================
 def fetch(url):
     r = requests.get(url, headers=headers, timeout=15)
@@ -35,7 +30,7 @@ def fetch(url):
 
 
 # =========================
-# 🏁 START MENU
+# 🏁 START
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -52,7 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# ⚽ LIVE MUNDIAL
+# ⚽ LIVE (CON MENSAJE SI VACÍO)
 # =========================
 async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -65,10 +60,14 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
     matches = data.get("response", [])
 
     if not matches:
-        await query.edit_message_text("⚽ No hay partidos en vivo ahora mismo.")
+        await query.edit_message_text(
+            "🔴 EN VIVO\n\n"
+            "No hay partidos del Mundial en este momento ⚽\n"
+            "Vuelve más tarde."
+        )
         return
 
-    msg = "⚽ EN VIVO MUNDIAL:\n\n"
+    msg = "🔴 EN VIVO MUNDIAL\n\n"
 
     for m in matches[:10]:
         home = m["teams"]["home"]["name"]
@@ -83,7 +82,7 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 📅 PARTIDOS HOY (MUNDIAL)
+# 📅 PARTIDOS HOY (CON MENSAJE SI VACÍO)
 # =========================
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -98,10 +97,13 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     matches = data.get("response", [])
 
     if not matches:
-        await query.edit_message_text("📅 No hay partidos del Mundial hoy.")
+        await query.edit_message_text(
+            "📅 PARTIDOS HOY\n\n"
+            "No hay partidos del Mundial programados para hoy ⚽"
+        )
         return
 
-    msg = "📅 PARTIDOS MUNDIAL HOY:\n\n"
+    msg = "📅 PARTIDOS HOY MUNDIAL\n\n"
 
     for m in matches:
         home = m["teams"]["home"]["name"]
@@ -114,7 +116,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 📊 CLASIFICACIÓN MUNDIAL
+# 📊 CLASIFICACIÓN
 # =========================
 async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -132,23 +134,16 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     groups = response[0]["league"]["standings"]
 
-    msg = "📊 CLASIFICACIÓN MUNDIAL 2026\n\n"
+    msg = "📊 CLASIFICACIÓN MUNDIAL\n\n"
 
     for group in groups:
-
         if not group:
             continue
 
-        group_name = group[0]["group"]
-
-        msg += f"🏆 {group_name}\n"
+        msg += f"🏆 {group[0]['group']}\n"
 
         for team in group:
-            rank = team["rank"]
-            name = team["team"]["name"]
-            pts = team["points"]
-
-            msg += f"{rank}. {name} ({pts} pts)\n"
+            msg += f"{team['rank']}. {team['team']['name']} ({team['points']} pts)\n"
 
         msg += "\n"
 
@@ -173,12 +168,12 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 🤖 INIT BOT
+# 🤖 BOT INIT
 # =========================
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(buttons))
 
-print("🚀 BOT MUNDIAL 2026 ONLINE")
+print("🚀 BOT MUNDIAL ONLINE")
 app.run_polling()
