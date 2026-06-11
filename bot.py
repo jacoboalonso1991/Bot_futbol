@@ -1,7 +1,8 @@
+```python
 import os
 import requests
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from telegram import (
     Update,
@@ -58,12 +59,13 @@ def api_get(endpoint):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-    [InlineKeyboardButton("🏆 Grupos", callback_data="groups")],
-    [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
-    [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-    [InlineKeyboardButton("📆 Próximos partidos", callback_data="next")],
-    [InlineKeyboardButton("⚽ Últimos resultados", callback_data="results")]
-]
+        [InlineKeyboardButton("🏆 Grupos", callback_data="groups")],
+        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
+        [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
+        [InlineKeyboardButton("📆 Próximos partidos", callback_data="next")],
+        [InlineKeyboardButton("⚽ Últimos resultados", callback_data="results")]
+    ]
+
     await update.message.reply_text(
         "🏆 BOT MUNDIAL 2026\n\nSelecciona una opción:",
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -109,7 +111,7 @@ async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================
-# CLASIFICACION
+# CLASIFICACIÓN
 # ==================================
 
 async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -201,11 +203,50 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================================
-# PROXIMOS PARTIDOS
+# PRÓXIMOS PARTIDOS
 # ==================================
 
 async def next_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ==================================
+
+    query = update.callback_query
+    await query.answer()
+
+    data = api_get("/competitions/WC/matches")
+
+    if not data:
+        await query.edit_message_text(
+            "❌ No se pudieron cargar los partidos."
+        )
+        return
+
+    msg = "📆 PRÓXIMOS PARTIDOS\n\n"
+
+    count = 0
+
+    for match in data.get("matches", []):
+
+        if count >= 10:
+            break
+
+        if match.get("status") == "SCHEDULED":
+
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+
+            date = match["utcDate"][:10]
+            hour = match["utcDate"][11:16]
+
+            msg += (
+                f"📅 {date} {hour}\n"
+                f"{home} vs {away}\n\n"
+            )
+
+            count += 1
+
+    await query.edit_message_text(msg[:4000])
+
+
+# ==================================
 # ÚLTIMOS RESULTADOS
 # ==================================
 
@@ -251,45 +292,6 @@ async def results(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(msg[:4000])
 
-    query = update.callback_query
-    await query.answer()
-
-    data = api_get("/competitions/WC/matches")
-
-    if not data:
-        await query.edit_message_text(
-            "❌ No se pudieron cargar los partidos."
-        )
-        return
-
-    msg = "📆 PRÓXIMOS PARTIDOS\n\n"
-
-    count = 0
-
-    for match in data.get("matches", []):
-
-        if count >= 10:
-            break
-
-        status = match.get("status")
-
-        if status == "SCHEDULED":
-
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-
-            date = match["utcDate"][:10]
-            hour = match["utcDate"][11:16]
-
-            msg += (
-                f"📅 {date} {hour}\n"
-                f"{home} vs {away}\n\n"
-            )
-
-            count += 1
-
-    await query.edit_message_text(msg[:4000])
-
 
 # ==================================
 # BOTONES
@@ -300,19 +302,19 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = update.callback_query.data
 
     if data == "groups":
-    await groups(update, context)
+        await groups(update, context)
 
-elif data == "standings":
-    await standings(update, context)
+    elif data == "standings":
+        await standings(update, context)
 
-elif data == "today":
-    await today(update, context)
+    elif data == "today":
+        await today(update, context)
 
-elif data == "next":
-    await next_matches(update, context)
+    elif data == "next":
+        await next_matches(update, context)
 
-elif data == "results":
-    await results(update, context)
+    elif data == "results":
+        await results(update, context)
 
 
 # ==================================
@@ -327,3 +329,4 @@ app.add_handler(CallbackQueryHandler(buttons))
 print("🏆 BOT MUNDIAL 2026 ONLINE")
 
 app.run_polling()
+```
