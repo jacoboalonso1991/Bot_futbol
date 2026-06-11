@@ -1,246 +1,281 @@
 import os
-import asyncio
 import requests
 
-from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from datetime import datetime, timezone
+
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
-    ContextTypes,
+    ContextTypes
 )
 
-# =========================
-# 🔐 CONFIG
-# =========================
+# ==================================
+# CONFIG
+# ==================================
+
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
-headers = {
-    "x-apisports-key": API_KEY,
-    "Accept": "application/json"
+HEADERS = {
+    "X-Auth-Token": API_KEY
 }
 
-# 🟢 WORLD CUP OPEN DATA (sin key)
-WORLD_CUP_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
+BASE_URL = "https://api.football-data.org/v4"
 
 
-# =========================
-# 🔧 FETCH
-# =========================
-def fetch(url):
+# ==================================
+# HELPERS
+# ==================================
+
+def api_get(endpoint):
     try:
-        r = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(
+            f"{BASE_URL}{endpoint}",
+            headers=HEADERS,
+            timeout=15
+        )
+
+        if r.status_code != 200:
+            return None
+
         return r.json()
-    except:
-        return {}
+
+    except Exception:
+        return None
 
 
-def fetch_public(url):
-    try:
-        r = requests.get(url, timeout=15)
-        return r.json()
-    except:
-        return {}
+# ==================================
+# START
+# ==================================
 
-
-# =========================
-# 🏁 START
-# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("⚽ EN VIVO", callback_data="live")],
-        [InlineKeyboardButton("📅 PARTIDOS HOY", callback_data="today")],
-        [InlineKeyboardButton("📊 CLASIFICACIÓN", callback_data="standings")],
-        [InlineKeyboardButton("🌍 GRUPOS", callback_data="groups")],
+        [InlineKeyboardButton("🏆 Grupos", callback_data="groups")],
+        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
+        [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
+        [InlineKeyboardButton("📆 Próximos partidos", callback_data="next")]
     ]
 
     await update.message.reply_text(
-        "🏆 BOT MUNDIAL HÍBRIDO PRO ACTIVADO",
+        "🏆 BOT MUNDIAL 2026\n\nSelecciona una opción:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-# =========================
-# ⚽ LIVE (API-FOOTBALL)
-# =========================
-async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ==================================
+# GRUPOS
+# ==================================
 
-    query = update.callback_query
-    await query.answer()
-
-    url = "https://v3.football.api-sports.io/fixtures?live=all&league=1&season=2026"
-    data = await asyncio.to_thread(fetch, url)
-
-    matches = data.get("response", [])
-
-    if not matches:
-        await query.edit_message_text(
-            "🔴 EN VIVO\n\n"
-            "No hay partidos en directo en este momento ⚽"
-        )
-        return
-
-    msg = "🔴 EN VIVO MUNDIAL\n\n"
-
-    for m in matches[:10]:
-        home = m["teams"]["home"]["name"]
-        away = m["teams"]["away"]["name"]
-        g1 = m["goals"]["home"]
-        g2 = m["goals"]["away"]
-        status = m["fixture"]["status"]["short"]
-
-        msg += f"{home} {g1}-{g2} {away} ({status})\n"
-
-    await query.edit_message_text(msg)
-
-
-# =========================
-# 📅 PARTIDOS HOY (API-FOOTBALL)
-# =========================
-async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    today_date = datetime.now().strftime("%Y-%m-%d")
-
-    url = f"https://v3.football.api-sports.io/fixtures?league=1&season=2026&date={today_date}"
-    data = await asyncio.to_thread(fetch, url)
-
-    matches = data.get("response", [])
-
-    if not matches:
-        await query.edit_message_text(
-            "📅 PARTIDOS HOY\n\n"
-            "No hay partidos programados del Mundial hoy ⚽"
-        )
-        return
-
-    msg = "📅 PARTIDOS HOY MUNDIAL\n\n"
-
-    for m in matches:
-        home = m["teams"]["home"]["name"]
-        away = m["teams"]["away"]["name"]
-        hour = m["fixture"]["date"][11:16]
-
-        msg += f"🕒 {hour} - {home} vs {away}\n"
-
-    await query.edit_message_text(msg[:4000])
-
-
-# =========================
-# 📊 CLASIFICACIÓN (API-FOOTBALL)
-# =========================
-async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    url = "https://v3.football.api-sports.io/standings?league=1&season=2026"
-    data = await asyncio.to_thread(fetch, url)
-
-    response = data.get("response", [])
-
-    if not response:
-        await query.edit_message_text("❌ No hay clasificación disponible.")
-        return
-
-    groups = response[0]["league"]["standings"]
-
-    msg = "📊 CLASIFICACIÓN MUNDIAL\n\n"
-
-    for group in groups:
-        if not group:
-            continue
-
-        msg += f"🏆 {group[0]['group']}\n"
-
-        for team in group:
-            msg += f"{team['rank']}. {team['team']['name']} ({team['points']} pts)\n"
-
-        msg += "\n"
-
-    await query.edit_message_text(msg[:4000])
-
-
-# =========================
-# 🌍 GRUPOS (WORLD CUP OPEN DATA FALLBACK)
-# =========================
 async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    url = "https://raw.githubusercontent.com/openfootball/world-cup/master/2022/worldcup.json"
+    data = api_get("/competitions/WC/standings")
 
-    try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-    except:
+    if not data:
         await query.edit_message_text(
-            "🌍 GRUPOS\n\nNo se pudieron cargar los datos del Mundial."
+            "❌ No se pudieron cargar los grupos."
         )
         return
 
-    rounds = data.get("rounds", [])
+    msg = "🏆 GRUPOS DEL MUNDIAL\n\n"
 
-    if not rounds:
-        await query.edit_message_text(
-            "🌍 GRUPOS\n\nDatos no disponibles en este momento."
-        )
-        return
+    standings = data.get("standings", [])
 
-    msg = "🌍 GRUPOS (BASE)\n\n"
+    for group in standings:
 
-    for r in rounds[:8]:
+        group_name = group.get("group", "")
 
-        name = r.get("name", "Grupo")
-        matches = r.get("matches", [])
+        if not group_name:
+            continue
 
-        msg += f"🏆 {name}\n"
+        msg += f"{group_name}\n"
 
-        for m in matches[:4]:
-            home = m.get("team1")
-            away = m.get("team2")
-
-            if home and away:
-                msg += f"{home} vs {away}\n"
+        for team in group["table"]:
+            msg += f"• {team['team']['name']}\n"
 
         msg += "\n"
 
     await query.edit_message_text(msg[:4000])
 
 
-# =========================
-# 🔀 BOTONES
-# =========================
+# ==================================
+# CLASIFICACION
+# ==================================
+
+async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = api_get("/competitions/WC/standings")
+
+    if not data:
+        await query.edit_message_text(
+            "❌ No se pudo cargar la clasificación."
+        )
+        return
+
+    msg = "📊 CLASIFICACIÓN\n\n"
+
+    standings = data.get("standings", [])
+
+    for group in standings:
+
+        group_name = group.get("group", "")
+
+        if not group_name:
+            continue
+
+        msg += f"🏆 {group_name}\n"
+
+        for team in group["table"]:
+
+            msg += (
+                f"{team['position']}. "
+                f"{team['team']['name']} "
+                f"({team['points']} pts)\n"
+            )
+
+        msg += "\n"
+
+    await query.edit_message_text(msg[:4000])
+
+
+# ==================================
+# PARTIDOS HOY
+# ==================================
+
+async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = api_get("/competitions/WC/matches")
+
+    if not data:
+        await query.edit_message_text(
+            "❌ No se pudieron cargar los partidos."
+        )
+        return
+
+    today_date = datetime.utcnow().date()
+
+    matches_today = []
+
+    for match in data.get("matches", []):
+
+        utc_date = match["utcDate"][:10]
+
+        if utc_date == str(today_date):
+            matches_today.append(match)
+
+    if not matches_today:
+
+        await query.edit_message_text(
+            "📅 No hay partidos del Mundial hoy."
+        )
+        return
+
+    msg = "📅 PARTIDOS DE HOY\n\n"
+
+    for match in matches_today:
+
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+
+        kickoff = match["utcDate"][11:16]
+
+        msg += f"🕒 {kickoff} UTC\n{home} vs {away}\n\n"
+
+    await query.edit_message_text(msg[:4000])
+
+
+# ==================================
+# PROXIMOS PARTIDOS
+# ==================================
+
+async def next_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = api_get("/competitions/WC/matches")
+
+    if not data:
+        await query.edit_message_text(
+            "❌ No se pudieron cargar los partidos."
+        )
+        return
+
+    msg = "📆 PRÓXIMOS PARTIDOS\n\n"
+
+    count = 0
+
+    for match in data.get("matches", []):
+
+        if count >= 10:
+            break
+
+        status = match.get("status")
+
+        if status == "SCHEDULED":
+
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+
+            date = match["utcDate"][:10]
+            hour = match["utcDate"][11:16]
+
+            msg += (
+                f"📅 {date} {hour}\n"
+                f"{home} vs {away}\n\n"
+            )
+
+            count += 1
+
+    await query.edit_message_text(msg[:4000])
+
+
+# ==================================
+# BOTONES
+# ==================================
+
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = update.callback_query.data
 
-    if data == "live":
-        await live(update, context)
-
-    elif data == "today":
-        await today(update, context)
+    if data == "groups":
+        await groups(update, context)
 
     elif data == "standings":
         await standings(update, context)
 
-    elif data == "groups":
-        await groups(update, context)
+    elif data == "today":
+        await today(update, context)
+
+    elif data == "next":
+        await next_matches(update, context)
 
 
-# =========================
-# 🤖 INIT
-# =========================
+# ==================================
+# MAIN
+# ==================================
+
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(buttons))
 
-print("🚀 BOT MUNDIAL HÍBRIDO PRO ONLINE")
+print("🏆 BOT MUNDIAL 2026 ONLINE")
+
 app.run_polling()
