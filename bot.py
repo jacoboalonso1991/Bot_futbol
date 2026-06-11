@@ -225,12 +225,22 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "id":
         await get_id(update, context)
 
+async def testapi(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    r = requests.get(
+        "https://v3.football.api-sports.io/status",
+        headers=headers
+    )
+
+    await update.message.reply_text(
+        f"STATUS: {r.status_code}\n\n{r.text[:3500]}"
+    )
 # 🤖 BOT INIT
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("id", get_id))
+app.add_handler(CommandHandler("testapi", testapi))
 app.add_handler(CallbackQueryHandler(buttons))
 
 
