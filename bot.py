@@ -328,4 +328,3 @@ app.add_handler(CallbackQueryHandler(buttons))
 print("🏆 BOT MUNDIAL 2026 ONLINE")
 
 app.run_polling()
-```
