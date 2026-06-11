@@ -11,7 +11,9 @@ from telegram.ext import (
     ContextTypes,
 )
 
+# =========================
 # 🔐 CONFIG
+# =========================
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
@@ -20,13 +22,27 @@ headers = {
     "Accept": "application/json"
 }
 
+# 🟢 WORLD CUP OPEN DATA (sin key)
+WORLD_CUP_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
+
 
 # =========================
-# 🔧 REQUEST
+# 🔧 FETCH
 # =========================
 def fetch(url):
-    r = requests.get(url, headers=headers, timeout=15)
-    return r.json()
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        return r.json()
+    except:
+        return {}
+
+
+def fetch_public(url):
+    try:
+        r = requests.get(url, timeout=15)
+        return r.json()
+    except:
+        return {}
 
 
 # =========================
@@ -38,16 +54,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("⚽ EN VIVO", callback_data="live")],
         [InlineKeyboardButton("📅 PARTIDOS HOY", callback_data="today")],
         [InlineKeyboardButton("📊 CLASIFICACIÓN", callback_data="standings")],
+        [InlineKeyboardButton("🌍 GRUPOS", callback_data="groups")],
     ]
 
     await update.message.reply_text(
-        "🏆 BOT MUNDIAL 2026 ACTIVADO",
+        "🏆 BOT MUNDIAL HÍBRIDO PRO ACTIVADO",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # =========================
-# ⚽ LIVE (CON MENSAJE SI VACÍO)
+# ⚽ LIVE (API-FOOTBALL)
 # =========================
 async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -62,8 +79,7 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not matches:
         await query.edit_message_text(
             "🔴 EN VIVO\n\n"
-            "No hay partidos del Mundial en este momento ⚽\n"
-            "Vuelve más tarde."
+            "No hay partidos en directo en este momento ⚽"
         )
         return
 
@@ -82,7 +98,7 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 📅 PARTIDOS HOY (CON MENSAJE SI VACÍO)
+# 📅 PARTIDOS HOY (API-FOOTBALL)
 # =========================
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -99,7 +115,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not matches:
         await query.edit_message_text(
             "📅 PARTIDOS HOY\n\n"
-            "No hay partidos del Mundial programados para hoy ⚽"
+            "No hay partidos programados del Mundial hoy ⚽"
         )
         return
 
@@ -116,7 +132,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 📊 CLASIFICACIÓN
+# 📊 CLASIFICACIÓN (API-FOOTBALL)
 # =========================
 async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -129,7 +145,7 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     response = data.get("response", [])
 
     if not response:
-        await query.edit_message_text("❌ No hay datos de clasificación.")
+        await query.edit_message_text("❌ No hay clasificación disponible.")
         return
 
     groups = response[0]["league"]["standings"]
@@ -144,6 +160,46 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         for team in group:
             msg += f"{team['rank']}. {team['team']['name']} ({team['points']} pts)\n"
+
+        msg += "\n"
+
+    await query.edit_message_text(msg[:4000])
+
+
+# =========================
+# 🌍 GRUPOS (WORLD CUP OPEN DATA FALLBACK)
+# =========================
+async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = await asyncio.to_thread(fetch_public, WORLD_CUP_URL)
+
+    stages = data.get("rounds", [])
+
+    if not stages:
+        await query.edit_message_text(
+            "🌍 GRUPOS\n\n"
+            "No se han podido cargar los datos del Mundial."
+        )
+        return
+
+    msg = "🌍 GRUPOS / CALENDARIO MUNDIAL\n\n"
+
+    # mostramos primeras rondas como estructura base
+    for round_data in stages[:3]:
+
+        name = round_data.get("name", "Ronda")
+        matches = round_data.get("matches", [])
+
+        msg += f"🏆 {name}\n"
+
+        for m in matches[:5]:
+            home = m.get("team1")
+            away = m.get("team2")
+
+            msg += f"{home} vs {away}\n"
 
         msg += "\n"
 
@@ -166,14 +222,17 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "standings":
         await standings(update, context)
 
+    elif data == "groups":
+        await groups(update, context)
+
 
 # =========================
-# 🤖 BOT INIT
+# 🤖 INIT
 # =========================
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(buttons))
 
-print("🚀 BOT MUNDIAL ONLINE")
+print("🚀 BOT MUNDIAL HÍBRIDO PRO ONLINE")
 app.run_polling()
