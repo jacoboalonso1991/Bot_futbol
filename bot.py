@@ -11,7 +11,9 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# 🔐 TOKENS
+# =========================
+# 🔐 CONFIG
+# =========================
 TOKEN = os.environ.get("TOKEN")
 API_KEY = os.environ.get("API_KEY")
 
@@ -25,10 +27,11 @@ seen_events = set()
 
 
 # =========================
-# 🔧 FETCH ASYNC SAFE
+# 🔧 REQUEST WRAPPER
 # =========================
 def fetch(url):
-    return requests.get(url, headers=headers, timeout=15).json()
+    r = requests.get(url, headers=headers, timeout=15)
+    return r.json()
 
 
 # =========================
@@ -37,26 +40,26 @@ def fetch(url):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("⚽ En vivo", callback_data="live")],
-        [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
+        [InlineKeyboardButton("⚽ EN VIVO", callback_data="live")],
+        [InlineKeyboardButton("📅 PARTIDOS HOY", callback_data="today")],
+        [InlineKeyboardButton("📊 CLASIFICACIÓN", callback_data="standings")],
     ]
 
     await update.message.reply_text(
-        "🏆 BOT MUNDIAL ACTIVADO",
+        "🏆 BOT MUNDIAL 2026 ACTIVADO",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
 # =========================
-# ⚽ LIVE
+# ⚽ LIVE MUNDIAL
 # =========================
 async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
 
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
+    url = "https://v3.football.api-sports.io/fixtures?live=all&league=1&season=2026"
     data = await asyncio.to_thread(fetch, url)
 
     matches = data.get("response", [])
@@ -65,7 +68,7 @@ async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⚽ No hay partidos en vivo ahora mismo.")
         return
 
-    msg = "⚽ EN VIVO:\n\n"
+    msg = "⚽ EN VIVO MUNDIAL:\n\n"
 
     for m in matches[:10]:
         home = m["teams"]["home"]["name"]
@@ -89,18 +92,18 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     today_date = datetime.now().strftime("%Y-%m-%d")
 
-    url = f"https://v3.football.api-sports.io/fixtures?date={today_date}"
+    url = f"https://v3.football.api-sports.io/fixtures?league=1&season=2026&date={today_date}"
     data = await asyncio.to_thread(fetch, url)
 
     matches = data.get("response", [])
 
     if not matches:
-        await query.edit_message_text("📅 No hay partidos hoy.")
+        await query.edit_message_text("📅 No hay partidos del Mundial hoy.")
         return
 
-    msg = "📅 PARTIDOS HOY:\n\n"
+    msg = "📅 PARTIDOS MUNDIAL HOY:\n\n"
 
-    for m in matches[:15]:
+    for m in matches:
         home = m["teams"]["home"]["name"]
         away = m["teams"]["away"]["name"]
         hour = m["fixture"]["date"][11:16]
@@ -129,16 +132,23 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     groups = response[0]["league"]["standings"]
 
-    msg = "📊 CLASIFICACIÓN MUNDIAL\n\n"
+    msg = "📊 CLASIFICACIÓN MUNDIAL 2026\n\n"
 
     for group in groups:
+
         if not group:
             continue
 
-        msg += f"🏆 {group[0]['group']}\n"
+        group_name = group[0]["group"]
+
+        msg += f"🏆 {group_name}\n"
 
         for team in group:
-            msg += f"{team['rank']}. {team['team']['name']} ({team['points']} pts)\n"
+            rank = team["rank"]
+            name = team["team"]["name"]
+            pts = team["points"]
+
+            msg += f"{rank}. {name} ({pts} pts)\n"
 
         msg += "\n"
 
@@ -163,13 +173,12 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# 🤖 INIT
+# 🤖 INIT BOT
 # =========================
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(buttons))
 
-
-print("🚀 BOT MUNDIAL ONLINE")
+print("🚀 BOT MUNDIAL 2026 ONLINE")
 app.run_polling()
