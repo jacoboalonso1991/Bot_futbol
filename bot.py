@@ -58,12 +58,12 @@ def api_get(endpoint):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [InlineKeyboardButton("🏆 Grupos", callback_data="groups")],
-        [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
-        [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
-        [InlineKeyboardButton("📆 Próximos partidos", callback_data="next")]
-    ]
-
+    [InlineKeyboardButton("🏆 Grupos", callback_data="groups")],
+    [InlineKeyboardButton("📊 Clasificación", callback_data="standings")],
+    [InlineKeyboardButton("📅 Partidos hoy", callback_data="today")],
+    [InlineKeyboardButton("📆 Próximos partidos", callback_data="next")],
+    [InlineKeyboardButton("⚽ Últimos resultados", callback_data="results")]
+]
     await update.message.reply_text(
         "🏆 BOT MUNDIAL 2026\n\nSelecciona una opción:",
         reply_markup=InlineKeyboardMarkup(keyboard)
@@ -205,6 +205,51 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================================
 
 async def next_matches(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ==================================
+# ÚLTIMOS RESULTADOS
+# ==================================
+
+async def results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = api_get("/competitions/WC/matches")
+
+    if not data:
+        await query.edit_message_text(
+            "❌ No se pudieron cargar los resultados."
+        )
+        return
+
+    finished = []
+
+    for match in data.get("matches", []):
+
+        if match.get("status") == "FINISHED":
+            finished.append(match)
+
+    if not finished:
+        await query.edit_message_text(
+            "⚽ Todavía no hay resultados disponibles."
+        )
+        return
+
+    finished = finished[-10:]
+
+    msg = "⚽ ÚLTIMOS RESULTADOS\n\n"
+
+    for match in reversed(finished):
+
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+
+        home_score = match["score"]["fullTime"]["home"]
+        away_score = match["score"]["fullTime"]["away"]
+
+        msg += f"{home} {home_score}-{away_score} {away}\n"
+
+    await query.edit_message_text(msg[:4000])
 
     query = update.callback_query
     await query.answer()
@@ -255,16 +300,19 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = update.callback_query.data
 
     if data == "groups":
-        await groups(update, context)
+    await groups(update, context)
 
-    elif data == "standings":
-        await standings(update, context)
+elif data == "standings":
+    await standings(update, context)
 
-    elif data == "today":
-        await today(update, context)
+elif data == "today":
+    await today(update, context)
 
-    elif data == "next":
-        await next_matches(update, context)
+elif data == "next":
+    await next_matches(update, context)
+
+elif data == "results":
+    await results(update, context)
 
 
 # ==================================
