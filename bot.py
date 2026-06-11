@@ -174,32 +174,40 @@ async def groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = await asyncio.to_thread(fetch_public, WORLD_CUP_URL)
+    url = "https://raw.githubusercontent.com/openfootball/world-cup/master/2022/worldcup.json"
 
-    stages = data.get("rounds", [])
-
-    if not stages:
+    try:
+        r = requests.get(url, timeout=10)
+        data = r.json()
+    except:
         await query.edit_message_text(
-            "🌍 GRUPOS\n\n"
-            "No se han podido cargar los datos del Mundial."
+            "🌍 GRUPOS\n\nNo se pudieron cargar los datos del Mundial."
         )
         return
 
-    msg = "🌍 GRUPOS / CALENDARIO MUNDIAL\n\n"
+    rounds = data.get("rounds", [])
 
-    # mostramos primeras rondas como estructura base
-    for round_data in stages[:3]:
+    if not rounds:
+        await query.edit_message_text(
+            "🌍 GRUPOS\n\nDatos no disponibles en este momento."
+        )
+        return
 
-        name = round_data.get("name", "Ronda")
-        matches = round_data.get("matches", [])
+    msg = "🌍 GRUPOS (BASE)\n\n"
+
+    for r in rounds[:8]:
+
+        name = r.get("name", "Grupo")
+        matches = r.get("matches", [])
 
         msg += f"🏆 {name}\n"
 
-        for m in matches[:5]:
+        for m in matches[:4]:
             home = m.get("team1")
             away = m.get("team2")
 
-            msg += f"{home} vs {away}\n"
+            if home and away:
+                msg += f"{home} vs {away}\n"
 
         msg += "\n"
 
